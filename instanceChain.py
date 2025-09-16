@@ -29,12 +29,19 @@ def _max_dist_pair(points):
                 pair = (i, j)
     return pair  # (idxA, idxB)
 
+try:
+    string_types = (basestring,)  # type: ignore[name-defined]
+except NameError:  # pragma: no cover - Python 3 only
+    string_types = (str,)
+
+
 def instance_between_chain(
     template=None,
     targets=None,
     per_segment=1,                 # 各区間に何個置くか（= 1なら中点のみ）
     parent_instances_to=None,      # None: ワールド直下 / "same": 対象と同じ親 / 具体名: そのノード
-    orient="none"                  # "none" | "aim" | "copy"
+    orient="none",                # "none" | "aim" | "copy"
+    group_name=None,
 ):
     """
     選択： [テンプレ(最初)] + [対象群(2個以上)]
@@ -49,6 +56,10 @@ def instance_between_chain(
             - "same": 直前の左ノードと同じ親にする
             - 具体ノード名: そのノードの子にする
         orient (str): "none" (回転維持) / "aim" (区間の+Zを進行方向へ) / "copy"(templateのWS回転コピー)
+        group_name (str|None):
+            指定時は空グループを作成し、その子に全インスタンスを入れる。空文字なら "instanceGroup#"。
+            parent_instances_to が "same" の場合は最初の対象と同じ親に、
+            ノード名を指定した場合はそのノードの子にグループを配置します。
     Returns:
         list[str]: 生成インスタンスの名前
     """
@@ -77,6 +88,21 @@ def instance_between_chain(
     ordered_nodes = [targets[i] for i in order]
     ordered_pts   = [pts[i] for i in order]
 
+    group_node = None
+    if group_name is not None:
+        name = (group_name or "").strip() or "instanceGroup#"
+        group_node = cmds.group(em=True, name=name)
+        if parent_instances_to == "same" and ordered_nodes:
+            parent = cmds.listRelatives(ordered_nodes[0], p=True, f=True)
+            if parent:
+                group_node = cmds.parent(group_node, parent[0])[0]
+        elif (
+            isinstance(parent_instances_to, string_types)
+            and parent_instances_to not in ("", "same")
+            and cmds.objExists(parent_instances_to)
+        ):
+            group_node = cmds.parent(group_node, parent_instances_to)[0]
+
     created = []
     for k in range(len(ordered_nodes)-1):
         left_node  = ordered_nodes[k]
@@ -93,12 +119,14 @@ def instance_between_chain(
             inst = cmds.instance(template, smartTransform=False)[0]
 
             # 親付け
-            if parent_instances_to == "same":
+            if group_node:
+                inst = cmds.parent(inst, group_node)[0]
+            elif parent_instances_to == "same":
                 # 左ノードと同じ親
                 parent = cmds.listRelatives(left_node, p=True, f=True)
                 if parent:
                     inst = cmds.parent(inst, parent[0])[0]
-            elif isinstance(parent_instances_to, basestring if hasattr(__builtins__, 'basestring') else str):
+            elif isinstance(parent_instances_to, string_types):
                 if cmds.objExists(parent_instances_to):
                     inst = cmds.parent(inst, parent_instances_to)[0]
             # None の場合は親付けしない
