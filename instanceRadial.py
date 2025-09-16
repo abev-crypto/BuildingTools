@@ -1,17 +1,33 @@
+# -*- coding: utf-8 -*-
+"""Radial instance placement utilities."""
+
 import maya.cmds as cmds
 
-def create_instance_circle_with_rotation(num_instances=8, axis='y'):
-    sel = cmds.ls(selection=True)
+
+def create_instance_circle_with_rotation(num_instances=8, axis="y"):
+    """Create instances of the second selected object around the first.
+
+    Args:
+        num_instances (int): Number of instances to create around the circle.
+        axis (str): Axis to rotate around ("x", "y", or "z").
+    """
+    sel = cmds.ls(selection=True, type="transform")
     if len(sel) < 2:
-        cmds.error("2つのオブジェクトを選択してください：1つ目に基準のTransform、2つ目にインスタンス対象")
-        return
+        cmds.error(
+            u"2つのオブジェクトを選択してください：1つ目に基準のTransform、2つ目にインスタンス対象"
+        )
+        return []
 
     base = sel[0]
     target = sel[1]
 
     axis = axis.lower()
-    axis_index = {'x': 0, 'y': 1, 'z': 2}[axis]
-    angle_step = 360.0 / num_instances
+    if axis not in {"x", "y", "z"}:
+        cmds.error(u"axis は x / y / z のいずれかを指定してください。")
+        return []
+
+    angle_step = 360.0 / float(num_instances)
+    created = []
 
     for i in range(num_instances):
         null = cmds.group(empty=True, name=f"circle_null_{i:02}")
@@ -21,40 +37,43 @@ def create_instance_circle_with_rotation(num_instances=8, axis='y'):
 
         # インスタンス作成・親子付け
         instance = cmds.instance(target, name=f"{target}_inst_{i:02}")[0]
-        cmds.parent(instance, null)
+        instance = cmds.parent(instance, null)[0]
 
         # 回転追加
         cmds.setAttr(f"{null}.rotate{axis.upper()}", angle_step * i)
 
-    cmds.select(clear=True)
-    print(f"{num_instances} 個の Null + インスタンスが作成されました。")
+        created.append(instance)
+
+    cmds.select(created, r=True)
+    return created
 
 
 def show_circle_instance_ui():
+    """Show a small UI for the radial instance creator."""
     if cmds.window("circleInstanceWin", exists=True):
         cmds.deleteUI("circleInstanceWin")
 
-    win = cmds.window("circleInstanceWin", title="円状インスタンス配置", sizeable=False)
+    win = cmds.window("circleInstanceWin", title=u"円状インスタンス配置", sizeable=False)
     cmds.columnLayout(adjustableColumn=True, rowSpacing=8, columnAlign="center")
 
-    cmds.text(label="1つ目：基準Transform\n2つ目：インスタンス対象", align='center')
-    num_field = cmds.intFieldGrp(label="個数", value1=8)
+    cmds.text(label=u"1つ目：基準Transform\n2つ目：インスタンス対象", align="center")
+    num_field = cmds.intFieldGrp(label=u"個数", value1=8)
     axis_radio = cmds.radioButtonGrp(
-        label='回転軸',
-        labelArray3=['X', 'Y', 'Z'],
+        label=u"回転軸",
+        labelArray3=["X", "Y", "Z"],
         numberOfRadioButtons=3,
-        select=2  # Y軸デフォルト
+        select=2,  # Y軸デフォルト
     )
 
-    def on_create_pressed(*args):
+    def on_create_pressed(*_):
         count = cmds.intFieldGrp(num_field, q=True, value1=True)
         axis_index = cmds.radioButtonGrp(axis_radio, q=True, select=True)
-        axis = ['x', 'y', 'z'][axis_index - 1]
-        create_instance_circle_with_rotation(num_instances=count, axis=axis)
+        axis_value = ["x", "y", "z"][axis_index - 1]
+        create_instance_circle_with_rotation(num_instances=count, axis=axis_value)
 
-    cmds.button(label="作成", command=on_create_pressed, bgc=(0.6, 0.8, 0.6))
+    cmds.button(label=u"作成", command=on_create_pressed, bgc=(0.6, 0.8, 0.6))
     cmds.setParent("..")
     cmds.showWindow(win)
 
-# 実行
-show_circle_instance_ui()
+
+__all__ = ["create_instance_circle_with_rotation", "show_circle_instance_ui"]
