@@ -4,12 +4,13 @@
 import maya.cmds as cmds
 
 
-def create_instance_circle_with_rotation(num_instances=8, axis="y"):
+def create_instance_circle_with_rotation(num_instances=8, axis="y", radius=0.0):
     """Create instances of the second selected object around the first.
 
     Args:
         num_instances (int): Number of instances to create around the circle.
         axis (str): Axis to rotate around ("x", "y", or "z").
+        radius (float): Distance to offset along the rotation axis before rotating.
     """
     sel = cmds.ls(selection=True, type="transform")
     if len(sel) < 2:
@@ -34,6 +35,14 @@ def create_instance_circle_with_rotation(num_instances=8, axis="y"):
 
         # Transformの一致をMatchTransform系で行う
         cmds.matchTransform(null, base, pos=True, rot=True)
+
+        if radius:
+            offset_vector = {
+                "x": (radius, 0.0, 0.0),
+                "y": (0.0, radius, 0.0),
+                "z": (0.0, 0.0, radius),
+            }[axis]
+            cmds.move(*offset_vector, null, relative=True, objectSpace=True)
 
         # インスタンス作成・親子付け
         instance = cmds.instance(target, name=f"{target}_inst_{i:02}")[0]
