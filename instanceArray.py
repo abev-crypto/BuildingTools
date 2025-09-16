@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import math
 import maya.cmds as cmds
 
 def instance_child_between_parent(
@@ -9,6 +10,7 @@ def instance_child_between_parent(
     orient="none",   # "none" | "aim" | "copy"
     parent_instances_to_parent=True,
     group_name=None,
+    spacing=None,
 ):
     """
     親(始点)と子(終点)の間に、子をインスタンス化して等間隔配置する。
@@ -28,6 +30,7 @@ def instance_child_between_parent(
             指定時は空グループを作成し、生成したインスタンスを全てその子にする。
             文字列が空の場合は "instanceGroup#" を利用。
             parent_instances_to_parent が True の場合はグループを parent の子にします。
+        spacing (float|None): 指定した場合、親子間の距離に応じて等間隔配置する際の間隔。
     Returns:
         list[str]: 作成したインスタンスノード名のリスト
     """
@@ -40,10 +43,6 @@ def instance_child_between_parent(
 
     if not (cmds.objExists(parent) and cmds.objExists(child)):
         cmds.error(u"指定した parent または child が存在しません。")
-
-    if count < 1:
-        cmds.warning(u"count は 1 以上にしてください。何も作成しません。")
-        return []
 
     # ワールド座標の取得
     p_pos = cmds.xform(parent, q=True, ws=True, t=True)
@@ -61,6 +60,46 @@ def instance_child_between_parent(
     steps = [float(i)/(count+1) for i in range(1, count+1)]
     if include_end:
         steps.append(1.0)
+    # 補間ステップの決定
+    steps = []
+    if spacing is not None:
+        try:
+            spacing_value = float(spacing)
+        except (TypeError, ValueError):
+            cmds.warning(u"距離指定は数値を入力してください。何も作成しません。")
+            return []
+        if spacing_value <= 0:
+            cmds.warning(u"距離指定は正の値にしてください。何も作成しません。")
+            return []
+
+        vec = [c_pos[i] - p_pos[i] for i in range(3)]
+        total_dist = math.sqrt(sum(v * v for v in vec))
+        eps = 1e-6
+        if total_dist <= eps:
+            if include_end:
+                steps.append(1.0)
+            else:
+                cmds.warning(u"親と子の位置が同じため、距離指定では配置できません。")
+                return []
+        else:
+            current = spacing_value
+            while current < total_dist - eps:
+                steps.append(current / total_dist)
+                current += spacing_value
+            if include_end:
+                steps.append(1.0)
+    else:
+        if count < 1:
+            cmds.warning(u"count は 1 以上にしてください。何も作成しません。")
+            return []
+
+        steps = [float(i)/(count+1) for i in range(1, count+1)]
+        if include_end:
+            steps.append(1.0)
+
+    if not steps:
+        cmds.warning(u"指定条件では配置するインスタンスがありません。")
+        return []
 
     created = []
     for t in steps:
@@ -97,3 +136,4 @@ def instance_child_between_parent(
 # 使い方例:
 # 親→子を選択してから実行
 # instance_child_between_parent(count=5, include_end=True, orient="aim")
+# instance_child_between_parent(spacing=2.5, include_end=False)

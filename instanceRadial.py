@@ -4,7 +4,7 @@
 import maya.cmds as cmds
 
 
-def create_instance_circle_with_rotation(num_instances=8, axis="y", group_name=None):
+def create_instance_circle_with_rotation(num_instances=8, axis="y", group_name=None, radius=0.0):
     """Create instances of the second selected object around the first.
 
     Args:
@@ -13,6 +13,7 @@ def create_instance_circle_with_rotation(num_instances=8, axis="y", group_name=N
         group_name (str|None):
             指定時は空グループを新規作成し、生成した null をその子に、
             null 配下のインスタンスもまとめる。空文字なら "instanceGroup#"。
+        radius (float): Distance to offset along the rotation axis before rotating.
     """
     sel = cmds.ls(selection=True, type="transform")
     if len(sel) < 2:
@@ -45,6 +46,13 @@ def create_instance_circle_with_rotation(num_instances=8, axis="y", group_name=N
 
         if group_node:
             null = cmds.parent(null, group_node)[0]
+        if radius:
+            offset_vector = {
+                "x": (radius, 0.0, 0.0),
+                "y": (0.0, radius, 0.0),
+                "z": (0.0, 0.0, radius),
+            }[axis]
+            cmds.move(*offset_vector, null, relative=True, objectSpace=True)
 
         # インスタンス作成・親子付け
         instance = cmds.instance(target, name=f"{target}_inst_{i:02}")[0]
