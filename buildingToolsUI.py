@@ -11,6 +11,187 @@ import instanceUtilities
 
 WINDOW_NAME = "buildingToolsWin"
 
+OPTION_VAR_PREFIX = "buildingToolsUI_"
+_UI_CONTROLS = {}
+
+
+def _option_var_name(key):
+    return f"{OPTION_VAR_PREFIX}{key}"
+
+
+def load_prefs():
+    """Restore previously saved UI values from Maya's optionVar."""
+    if not _UI_CONTROLS:
+        return
+
+    controls = _UI_CONTROLS
+
+    def _get_option(key):
+        option_name = _option_var_name(key)
+        if cmds.optionVar(exists=option_name):
+            return cmds.optionVar(q=option_name)
+        return None
+
+    value = _get_option("array_count")
+    if value is not None:
+        try:
+            cmds.intFieldGrp(controls["array_count"], e=True, value1=int(value))
+        except (TypeError, ValueError):
+            pass
+
+    value = _get_option("array_include_end")
+    if value is not None:
+        try:
+            cmds.checkBox(controls["array_include_end"], e=True, value=bool(int(value)))
+        except (TypeError, ValueError):
+            pass
+
+    value = _get_option("array_orient")
+    if value is not None:
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            index = None
+        if index is not None:
+            num_items = cmds.optionMenuGrp(controls["array_orient"], q=True, numberOfItems=True)
+            index = max(1, min(num_items, index))
+            cmds.optionMenuGrp(controls["array_orient"], e=True, select=index)
+
+    value = _get_option("array_parent")
+    if value is not None:
+        try:
+            cmds.checkBox(controls["array_parent"], e=True, value=bool(int(value)))
+        except (TypeError, ValueError):
+            pass
+
+    value = _get_option("chain_count")
+    if value is not None:
+        try:
+            cmds.intFieldGrp(controls["chain_count"], e=True, value1=int(value))
+        except (TypeError, ValueError):
+            pass
+
+    value = _get_option("chain_parent_mode")
+    if value is not None:
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            index = None
+        if index is not None:
+            num_items = cmds.optionMenuGrp(controls["chain_parent_mode"], q=True, numberOfItems=True)
+            index = max(1, min(num_items, index))
+            cmds.optionMenuGrp(controls["chain_parent_mode"], e=True, select=index)
+
+    value = _get_option("chain_parent_target")
+    if value is not None:
+        cmds.textFieldGrp(controls["chain_parent_target"], e=True, text=value)
+
+    value = _get_option("chain_orient")
+    if value is not None:
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            index = None
+        if index is not None:
+            num_items = cmds.optionMenuGrp(controls["chain_orient"], q=True, numberOfItems=True)
+            index = max(1, min(num_items, index))
+            cmds.optionMenuGrp(controls["chain_orient"], e=True, select=index)
+
+    value = _get_option("radial_count")
+    if value is not None:
+        try:
+            cmds.intFieldGrp(controls["radial_count"], e=True, value1=int(value))
+        except (TypeError, ValueError):
+            pass
+
+    value = _get_option("radial_axis")
+    if value is not None:
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            index = None
+        if index is not None:
+            num_items = cmds.optionMenuGrp(controls["radial_axis"], q=True, numberOfItems=True)
+            index = max(1, min(num_items, index))
+            cmds.optionMenuGrp(controls["radial_axis"], e=True, select=index)
+
+    # Ensure the chain parent target field has the correct enabled state.
+    chain_parent_label = cmds.optionMenuGrp(controls["chain_parent_mode"], q=True, value=True)
+    cmds.textFieldGrp(
+        controls["chain_parent_target"],
+        e=True,
+        enable=chain_parent_label == u"指定ノード",
+    )
+
+
+def save_prefs():
+    """Persist current UI values via Maya's optionVar."""
+    if not _UI_CONTROLS:
+        return
+
+    controls = _UI_CONTROLS
+
+    cmds.optionVar(
+        iv=(
+            _option_var_name("array_count"),
+            int(cmds.intFieldGrp(controls["array_count"], q=True, value1=True)),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("array_include_end"),
+            int(bool(cmds.checkBox(controls["array_include_end"], q=True, value=True))),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("array_orient"),
+            int(cmds.optionMenuGrp(controls["array_orient"], q=True, select=True)),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("array_parent"),
+            int(bool(cmds.checkBox(controls["array_parent"], q=True, value=True))),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("chain_count"),
+            int(cmds.intFieldGrp(controls["chain_count"], q=True, value1=True)),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("chain_parent_mode"),
+            int(cmds.optionMenuGrp(controls["chain_parent_mode"], q=True, select=True)),
+        )
+    )
+    cmds.optionVar(
+        sv=(
+            _option_var_name("chain_parent_target"),
+            cmds.textFieldGrp(controls["chain_parent_target"], q=True, text=True),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("chain_orient"),
+            int(cmds.optionMenuGrp(controls["chain_orient"], q=True, select=True)),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("radial_count"),
+            int(cmds.intFieldGrp(controls["radial_count"], q=True, value1=True)),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("radial_axis"),
+            int(cmds.optionMenuGrp(controls["radial_axis"], q=True, select=True)),
+        )
+    )
+
 
 def _show_error(message):
     cmds.inViewMessage(amg=f"<span style='color:#ffaaaa'>{message}</span>", pos="midCenter", fade=True)
@@ -18,10 +199,14 @@ def _show_error(message):
 
 def show_ui():
     """Display the Building Tools UI window."""
+    global _UI_CONTROLS
     if cmds.window(WINDOW_NAME, exists=True):
+        save_prefs()
         cmds.deleteUI(WINDOW_NAME)
+        _UI_CONTROLS = {}
 
     win = cmds.window(WINDOW_NAME, title=u"Building Tools", sizeable=False)
+    cmds.columnLayout(adj=True, rowSpacing=8, columnAttach=("both", 8))
     tabs = cmds.tabLayout(innerMarginWidth=8, innerMarginHeight=8)
 
     # ------------------------------------------------------------------
@@ -190,6 +375,42 @@ def show_ui():
             (util_tab, u"ユーティリティ"),
         ],
     )
+
+    cmds.setParent("..")
+
+    def on_save_settings(*_):
+        save_prefs()
+        cmds.inViewMessage(
+            amg=u"<span style='color:#b0ffb0'>設定を保存しました。</span>",
+            pos="midCenter",
+            fade=True,
+        )
+
+    cmds.button(label=u"設定保存", command=on_save_settings, bgc=(0.8, 0.8, 0.8))
+
+    _UI_CONTROLS = {
+        "array_count": array_count,
+        "array_include_end": array_include_end,
+        "array_orient": array_orient,
+        "array_parent": array_parent,
+        "chain_count": chain_count,
+        "chain_parent_mode": chain_parent_mode,
+        "chain_parent_target": chain_parent_target,
+        "chain_orient": chain_orient,
+        "radial_count": radial_count,
+        "radial_axis": radial_axis,
+    }
+
+    load_prefs()
+
+    def on_close(*_):
+        global _UI_CONTROLS
+        try:
+            save_prefs()
+        finally:
+            _UI_CONTROLS = {}
+
+    cmds.window(win, e=True, closeCommand=on_close)
 
     cmds.showWindow(win)
     return win
