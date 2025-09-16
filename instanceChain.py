@@ -34,7 +34,8 @@ def instance_between_chain(
     targets=None,
     per_segment=1,                 # 各区間に何個置くか（= 1なら中点のみ）
     parent_instances_to=None,      # None: ワールド直下 / "same": 対象と同じ親 / 具体名: そのノード
-    orient="none"                  # "none" | "aim" | "copy"
+    orient="none",                # "none" | "aim" | "copy"
+    spacing=None,
 ):
     """
     選択： [テンプレ(最初)] + [対象群(2個以上)]
@@ -49,6 +50,7 @@ def instance_between_chain(
             - "same": 直前の左ノードと同じ親にする
             - 具体ノード名: そのノードの子にする
         orient (str): "none" (回転維持) / "aim" (区間の+Zを進行方向へ) / "copy"(templateのWS回転コピー)
+        spacing (float|None): 各区間でのインスタンス間隔。指定時は距離から自動的に配置数を決定。
     Returns:
         list[str]: 生成インスタンスの名前
     """
@@ -77,6 +79,17 @@ def instance_between_chain(
     ordered_nodes = [targets[i] for i in order]
     ordered_pts   = [pts[i] for i in order]
 
+    spacing_value = None
+    if spacing is not None:
+        try:
+            spacing_value = float(spacing)
+        except (TypeError, ValueError):
+            cmds.warning(u"距離指定は数値を入力してください。何も作成しません。")
+            return []
+        if spacing_value <= 0:
+            cmds.warning(u"距離指定は正の値にしてください。何も作成しません。")
+            return []
+
     created = []
     for k in range(len(ordered_nodes)-1):
         left_node  = ordered_nodes[k]
@@ -85,9 +98,21 @@ def instance_between_chain(
         p1 = ordered_pts[k+1]
         seg = _vec_sub(p1, p0)
 
-        # 区間に per_segment 個の等分点（中点だけなら per_segment=1 -> t=0.5）
-        for s in range(1, per_segment+1):
-            t = float(s)/(per_segment+1)
+        if spacing_value is not None:
+            seg_len = _len(seg)
+            eps = 1e-6
+            t_values = []
+            if seg_len > eps:
+                current = spacing_value
+                while current < seg_len - eps:
+                    t_values.append(current / seg_len)
+                    current += spacing_value
+            else:
+                t_values = []
+        else:
+            t_values = [float(s)/(per_segment+1) for s in range(1, per_segment+1)]
+
+        for t in t_values:
             pos = _vec_add(p0, _vec_mul(seg, t))
 
             inst = cmds.instance(template, smartTransform=False)[0]
@@ -123,6 +148,9 @@ def instance_between_chain(
 
             created.append(inst)
 
+    if spacing_value is not None and not created:
+        cmds.warning(u"指定条件では配置するインスタンスがありません。")
+
     return created
 
 # 使い方：
@@ -133,3 +161,6 @@ def instance_between_chain(
 
 # 例：各区間に2個置きたい（1/3 と 2/3 の位置）
 # instance_between_chain(per_segment=2, parent_instances_to=None, orient="none")
+
+# 例：各区間を 2.0 の距離で埋めたい
+# instance_between_chain(spacing=2.0, parent_instances_to=None, orient="none")

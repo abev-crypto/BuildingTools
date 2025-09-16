@@ -29,7 +29,20 @@ def show_ui():
     # ------------------------------------------------------------------
     array_tab = cmds.columnLayout(adj=True, rowSpacing=6, columnAttach=("both", 8))
     cmds.text(label=u"選択：親(始点) → 子(終点)", align="left")
+    array_spec_mode = cmds.optionMenuGrp(
+        label=u"指定方法",
+        columnWidth=[(1, 100)],
+    )
+    cmds.menuItem(label=u"個数指定")
+    cmds.menuItem(label=u"距離指定")
+
     array_count = cmds.intFieldGrp(label=u"間に置く個数", value1=5, columnWidth=[(1, 100), (2, 60)])
+    array_spacing = cmds.floatFieldGrp(
+        label=u"間隔 (距離)",
+        value1=1.0,
+        columnWidth=[(1, 100), (2, 80)],
+        enable=False,
+    )
     array_include_end = cmds.checkBox(label=u"終点にも配置する", value=False)
     array_orient = cmds.optionMenuGrp(label=u"向き", columnWidth=[(1, 100)])
     cmds.menuItem(label=u"維持 (none)")
@@ -37,15 +50,28 @@ def show_ui():
     cmds.menuItem(label=u"コピー (copy)")
     array_parent = cmds.checkBox(label=u"親(始点)の子にする", value=True)
 
+    def on_array_spec_mode_changed(*_):
+        use_spacing = cmds.optionMenuGrp(array_spec_mode, q=True, select=True) == 2
+        cmds.intFieldGrp(array_count, e=True, enable=not use_spacing)
+        cmds.floatFieldGrp(array_spacing, e=True, enable=use_spacing)
+
+    cmds.optionMenuGrp(array_spec_mode, e=True, changeCommand=on_array_spec_mode_changed)
+    on_array_spec_mode_changed()
+
     def on_array_execute(*_):
         try:
             orient_idx = cmds.optionMenuGrp(array_orient, q=True, select=True)
             orient_value = ["none", "aim", "copy"][orient_idx - 1]
+            use_spacing = cmds.optionMenuGrp(array_spec_mode, q=True, select=True) == 2
+            spacing_value = None
+            if use_spacing:
+                spacing_value = cmds.floatFieldGrp(array_spacing, q=True, value1=True)
             result = instanceArray.instance_child_between_parent(
                 count=cmds.intFieldGrp(array_count, q=True, value1=True),
                 include_end=cmds.checkBox(array_include_end, q=True, value=True),
                 orient=orient_value,
                 parent_instances_to_parent=cmds.checkBox(array_parent, q=True, value=True),
+                spacing=spacing_value,
             )
             if result:
                 cmds.inViewMessage(
@@ -64,7 +90,20 @@ def show_ui():
     # ------------------------------------------------------------------
     chain_tab = cmds.columnLayout(adj=True, rowSpacing=6, columnAttach=("both", 8))
     cmds.text(label=u"選択：テンプレート → 対象2つ以上", align="left")
+    chain_spec_mode = cmds.optionMenuGrp(
+        label=u"指定方法",
+        columnWidth=[(1, 110)],
+    )
+    cmds.menuItem(label=u"個数指定")
+    cmds.menuItem(label=u"距離指定")
+
     chain_count = cmds.intFieldGrp(label=u"各区間の個数", value1=1, columnWidth=[(1, 110), (2, 60)])
+    chain_spacing = cmds.floatFieldGrp(
+        label=u"各区間の間隔",
+        value1=1.0,
+        columnWidth=[(1, 110), (2, 80)],
+        enable=False,
+    )
 
     def on_parent_mode_changed(selection):
         enable = selection == u"指定ノード"
@@ -85,6 +124,14 @@ def show_ui():
     cmds.menuItem(label=u"区間方向 (aim)")
     cmds.menuItem(label=u"コピー (copy)")
 
+    def on_chain_spec_mode_changed(*_):
+        use_spacing = cmds.optionMenuGrp(chain_spec_mode, q=True, select=True) == 2
+        cmds.intFieldGrp(chain_count, e=True, enable=not use_spacing)
+        cmds.floatFieldGrp(chain_spacing, e=True, enable=use_spacing)
+
+    cmds.optionMenuGrp(chain_spec_mode, e=True, changeCommand=on_chain_spec_mode_changed)
+    on_chain_spec_mode_changed()
+
     def on_chain_execute(*_):
         try:
             orient_idx = cmds.optionMenuGrp(chain_orient, q=True, select=True)
@@ -97,10 +144,15 @@ def show_ui():
             else:
                 parent_text = cmds.textFieldGrp(chain_parent_target, q=True, text=True).strip()
                 parent_mode = parent_text or None
+            use_spacing = cmds.optionMenuGrp(chain_spec_mode, q=True, select=True) == 2
+            spacing_value = None
+            if use_spacing:
+                spacing_value = cmds.floatFieldGrp(chain_spacing, q=True, value1=True)
             result = instanceChain.instance_between_chain(
                 per_segment=cmds.intFieldGrp(chain_count, q=True, value1=True),
                 parent_instances_to=parent_mode,
                 orient=orient_value,
+                spacing=spacing_value,
             )
             if result:
                 cmds.inViewMessage(
