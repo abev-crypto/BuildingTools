@@ -120,6 +120,7 @@ def show_ui():
     radial_tab = cmds.columnLayout(adj=True, rowSpacing=6, columnAttach=("both", 8))
     cmds.text(label=u"選択：基準 → インスタンス対象", align="left")
     radial_count = cmds.intFieldGrp(label=u"個数", value1=8, columnWidth=[(1, 100), (2, 60)])
+    radial_radius = cmds.intFieldGrp(label=u"半径", value1=10, columnWidth=[(1, 100), (2, 60)])
     radial_axis = cmds.optionMenuGrp(label=u"回転軸", columnWidth=[(1, 100)])
     cmds.menuItem(label="X")
     cmds.menuItem(label="Y")
@@ -132,6 +133,7 @@ def show_ui():
             result = instanceRadial.create_instance_circle_with_rotation(
                 num_instances=cmds.intFieldGrp(radial_count, q=True, value1=True),
                 axis=axis_value,
+                radius=cmds.intFieldGrp(radial_radius, q=True, value1=True),
             )
             if result:
                 cmds.inViewMessage(
