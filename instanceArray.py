@@ -1,0 +1,84 @@
+# -*- coding: utf-8 -*-
+import maya.cmds as cmds
+
+def instance_child_between_parent(
+    parent=None,
+    child=None,
+    count=5,
+    include_end=False,
+    orient="none",   # "none" | "aim" | "copy"
+    parent_instances_to_parent=True
+):
+    """
+    親(始点)と子(終点)の間に、子をインスタンス化して等間隔配置する。
+
+    Args:
+        parent (str): 親トランスフォーム。未指定なら選択1つ目。
+        child (str):  子トランスフォーム（終点テンプレート）。未指定なら選択2つ目。
+        count (int):  作成するインスタンスの数（間に置く個数）。>=1
+        include_end (bool): Trueなら終点位置にもインスタンスを置く。
+        orient (str): 配向の方法
+            - "none": 回転は子の元の回転を維持
+            - "aim":  各インスタンスを終点方向に向ける
+            - "copy": 子のワールド回転をそのままコピー
+        parent_instances_to_parent (bool):
+            Trueならインスタンスを親(始点)の子にする。Falseならワールド直下。
+    Returns:
+        list[str]: 作成したインスタンスノード名のリスト
+    """
+    sel = cmds.ls(sl=True, type="transform", long=True) or []
+    if parent is None or child is None:
+        if len(sel) < 2:
+            cmds.error(u"親→子の順で2つ選択するか、引数で parent と child を指定してください。")
+        parent = parent or sel[0]
+        child  = child  or sel[1]
+
+    if not (cmds.objExists(parent) and cmds.objExists(child)):
+        cmds.error(u"指定した parent または child が存在しません。")
+
+    if count < 1:
+        cmds.warning(u"count は 1 以上にしてください。何も作成しません。")
+        return []
+
+    # ワールド座標の取得
+    p_pos = cmds.xform(parent, q=True, ws=True, t=True)
+    c_pos = cmds.xform(child,  q=True, ws=True, t=True)
+
+    # 配置割合の計算
+    steps = [float(i)/(count+1) for i in range(1, count+1)]
+    if include_end:
+        steps.append(1.0)
+
+    created = []
+    for t in steps:
+        pos = [p_pos[i] + (c_pos[i] - p_pos[i]) * t for i in range(3)]
+        inst = cmds.instance(child, smartTransform=False)[0]
+
+        # 親子付け
+        if parent_instances_to_parent:
+            inst = cmds.parent(inst, parent)[0]
+
+        # 配置
+        cmds.xform(inst, ws=True, t=pos)
+
+        # 回転処理
+        if orient == "copy":
+            rot = cmds.xform(child, q=True, ws=True, ro=True)
+            cmds.xform(inst, ws=True, ro=rot)
+        elif orient == "aim":
+            ac = cmds.aimConstraint(
+                child, inst,
+                aimVector=(0, 0, 1),
+                upVector=(0, 1, 0),
+                worldUpType="scene"
+            )[0]
+            cmds.delete(ac)
+
+        created.append(inst)
+
+    return created
+
+
+# 使い方例:
+# 親→子を選択してから実行
+# instance_child_between_parent(count=5, include_end=True, orient="aim")
