@@ -9,6 +9,7 @@ def instance_child_between_parent(
     include_end=False,
     orient="none",   # "none" | "aim" | "copy"
     parent_instances_to_parent=True,
+    group_name=None,
     spacing=None,
 ):
     """
@@ -25,6 +26,10 @@ def instance_child_between_parent(
             - "copy": 子のワールド回転をそのままコピー
         parent_instances_to_parent (bool):
             Trueならインスタンスを親(始点)の子にする。Falseならワールド直下。
+        group_name (str|None):
+            指定時は空グループを作成し、生成したインスタンスを全てその子にする。
+            文字列が空の場合は "instanceGroup#" を利用。
+            parent_instances_to_parent が True の場合はグループを parent の子にします。
         spacing (float|None): 指定した場合、親子間の距離に応じて等間隔配置する際の間隔。
     Returns:
         list[str]: 作成したインスタンスノード名のリスト
@@ -43,6 +48,18 @@ def instance_child_between_parent(
     p_pos = cmds.xform(parent, q=True, ws=True, t=True)
     c_pos = cmds.xform(child,  q=True, ws=True, t=True)
 
+    # グループ化
+    group_node = None
+    if group_name is not None:
+        name = (group_name or "").strip() or "instanceGroup#"
+        group_node = cmds.group(em=True, name=name)
+        if parent_instances_to_parent and parent and cmds.objExists(parent):
+            group_node = cmds.parent(group_node, parent)[0]
+
+    # 配置割合の計算
+    steps = [float(i)/(count+1) for i in range(1, count+1)]
+    if include_end:
+        steps.append(1.0)
     # 補間ステップの決定
     steps = []
     if spacing is not None:
@@ -90,7 +107,9 @@ def instance_child_between_parent(
         inst = cmds.instance(child, smartTransform=False)[0]
 
         # 親子付け
-        if parent_instances_to_parent:
+        if group_node:
+            inst = cmds.parent(inst, group_node)[0]
+        elif parent_instances_to_parent:
             inst = cmds.parent(inst, parent)[0]
 
         # 配置

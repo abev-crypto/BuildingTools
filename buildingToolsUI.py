@@ -49,6 +49,13 @@ def show_ui():
     cmds.menuItem(label=u"終点方向 (aim)")
     cmds.menuItem(label=u"コピー (copy)")
     array_parent = cmds.checkBox(label=u"親(始点)の子にする", value=True)
+    array_group = cmds.checkBox(label=u"インスタンスをグループ化", value=False)
+    array_group_name = cmds.textFieldGrp(label=u"グループ名", text="", enable=False)
+
+    def on_array_group_changed(value):
+        cmds.textFieldGrp(array_group_name, e=True, enable=value)
+
+    cmds.checkBox(array_group, e=True, changeCommand=on_array_group_changed)
 
     def on_array_spec_mode_changed(*_):
         use_spacing = cmds.optionMenuGrp(array_spec_mode, q=True, select=True) == 2
@@ -62,6 +69,10 @@ def show_ui():
         try:
             orient_idx = cmds.optionMenuGrp(array_orient, q=True, select=True)
             orient_value = ["none", "aim", "copy"][orient_idx - 1]
+            group_name = None
+            if cmds.checkBox(array_group, q=True, value=True):
+                text = cmds.textFieldGrp(array_group_name, q=True, text=True).strip()
+                group_name = text if text else ""
             use_spacing = cmds.optionMenuGrp(array_spec_mode, q=True, select=True) == 2
             spacing_value = None
             if use_spacing:
@@ -71,7 +82,9 @@ def show_ui():
                 include_end=cmds.checkBox(array_include_end, q=True, value=True),
                 orient=orient_value,
                 parent_instances_to_parent=cmds.checkBox(array_parent, q=True, value=True),
+                group_name=group_name,
                 spacing=spacing_value,
+
             )
             if result:
                 cmds.inViewMessage(
@@ -123,6 +136,13 @@ def show_ui():
     cmds.menuItem(label=u"維持 (none)")
     cmds.menuItem(label=u"区間方向 (aim)")
     cmds.menuItem(label=u"コピー (copy)")
+    chain_group = cmds.checkBox(label=u"インスタンスをグループ化", value=False)
+    chain_group_name = cmds.textFieldGrp(label=u"グループ名", text="", enable=False)
+
+    def on_chain_group_changed(value):
+        cmds.textFieldGrp(chain_group_name, e=True, enable=value)
+
+    cmds.checkBox(chain_group, e=True, changeCommand=on_chain_group_changed)
 
     def on_chain_spec_mode_changed(*_):
         use_spacing = cmds.optionMenuGrp(chain_spec_mode, q=True, select=True) == 2
@@ -144,6 +164,10 @@ def show_ui():
             else:
                 parent_text = cmds.textFieldGrp(chain_parent_target, q=True, text=True).strip()
                 parent_mode = parent_text or None
+            group_name = None
+            if cmds.checkBox(chain_group, q=True, value=True):
+                text = cmds.textFieldGrp(chain_group_name, q=True, text=True).strip()
+                group_name = text if text else ""
             use_spacing = cmds.optionMenuGrp(chain_spec_mode, q=True, select=True) == 2
             spacing_value = None
             if use_spacing:
@@ -152,6 +176,7 @@ def show_ui():
                 per_segment=cmds.intFieldGrp(chain_count, q=True, value1=True),
                 parent_instances_to=parent_mode,
                 orient=orient_value,
+                group_name=group_name,
                 spacing=spacing_value,
             )
             if result:
@@ -177,14 +202,26 @@ def show_ui():
     cmds.menuItem(label="X")
     cmds.menuItem(label="Y")
     cmds.menuItem(label="Z")
+    radial_group = cmds.checkBox(label=u"インスタンスをグループ化", value=False)
+    radial_group_name = cmds.textFieldGrp(label=u"グループ名", text="", enable=False)
+
+    def on_radial_group_changed(value):
+        cmds.textFieldGrp(radial_group_name, e=True, enable=value)
+
+    cmds.checkBox(radial_group, e=True, changeCommand=on_radial_group_changed)
 
     def on_radial_execute(*_):
         try:
             axis_idx = cmds.optionMenuGrp(radial_axis, q=True, select=True)
             axis_value = ["x", "y", "z"][axis_idx - 1]
+            group_name = None
+            if cmds.checkBox(radial_group, q=True, value=True):
+                text = cmds.textFieldGrp(radial_group_name, q=True, text=True).strip()
+                group_name = text if text else ""
             result = instanceRadial.create_instance_circle_with_rotation(
                 num_instances=cmds.intFieldGrp(radial_count, q=True, value1=True),
                 axis=axis_value,
+                group_name=group_name,
                 radius=cmds.intFieldGrp(radial_radius, q=True, value1=True),
             )
             if result:
