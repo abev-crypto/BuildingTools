@@ -542,6 +542,23 @@ def show_ui():
     cmds.button(label=u"選択をテンプレートのインスタンスで置換", command=on_replace, bgc=(0.6, 0.7, 0.9))
 
     cmds.separator(style="in")
+    cmds.text(label=u"選択：ミラーを作成したいインスタンス", align="left")
+
+    def on_mirror_instance(*_):
+        try:
+            result = instanceUtilities.mirror_selected_instances()
+            if result:
+                cmds.inViewMessage(
+                    amg=u"<span style='color:#b0ffb0'>%d 個のインスタンスをミラーしました。</span>" % len(result),
+                    pos="midCenter",
+                    fade=True,
+                )
+        except RuntimeError as exc:
+            _show_error(str(exc))
+
+    cmds.button(label=u"インスタンスをミラー", command=on_mirror_instance, bgc=(0.7, 0.7, 0.95))
+
+    cmds.separator(style="in")
     cmds.text(label=u"選択：インスタンス化を解除したいオブジェクト", align="left")
 
     def on_make_unique(*_):
