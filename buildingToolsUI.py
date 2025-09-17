@@ -64,6 +64,29 @@ def load_prefs():
         except (TypeError, ValueError):
             pass
 
+    value = _get_option("array_alternate_scale")
+    if value is not None and "array_alternate_scale" in controls:
+        try:
+            enabled = bool(int(value))
+        except (TypeError, ValueError):
+            enabled = False
+        cmds.checkBox(controls["array_alternate_scale"], e=True, value=enabled)
+
+    value = _get_option("array_alternate_scale_axis")
+    if value is not None and "array_alternate_scale_axis" in controls:
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            index = None
+        if index is not None:
+            num_items = cmds.optionMenuGrp(
+                controls["array_alternate_scale_axis"], q=True, numberOfItems=True
+            )
+            index = max(1, min(num_items, index))
+            cmds.optionMenuGrp(
+                controls["array_alternate_scale_axis"], e=True, select=index
+            )
+
     value = _get_option("chain_count")
     if value is not None:
         try:
@@ -157,6 +180,28 @@ def save_prefs():
     )
     cmds.optionVar(
         iv=(
+            _option_var_name("array_alternate_scale"),
+            int(
+                bool(
+                    cmds.checkBox(
+                        controls["array_alternate_scale"], q=True, value=True
+                    )
+                )
+            ),
+        )
+    )
+    cmds.optionVar(
+        iv=(
+            _option_var_name("array_alternate_scale_axis"),
+            int(
+                cmds.optionMenuGrp(
+                    controls["array_alternate_scale_axis"], q=True, select=True
+                )
+            ),
+        )
+    )
+    cmds.optionVar(
+        iv=(
             _option_var_name("chain_count"),
             int(cmds.intFieldGrp(controls["chain_count"], q=True, value1=True)),
         )
@@ -220,6 +265,7 @@ def show_ui():
     )
     cmds.menuItem(label=u"個数指定")
     cmds.menuItem(label=u"距離指定")
+    cmds.menuItem(label=u"バウンディングボックス")
 
     array_count = cmds.intFieldGrp(label=u"間に置く個数", value1=5, columnWidth=[(1, 100), (2, 60)])
     array_spacing = cmds.floatFieldGrp(
@@ -230,6 +276,15 @@ def show_ui():
     )
     array_bbox_axis = cmds.optionMenuGrp(
         label=u"ローカル軸",
+        columnWidth=[(1, 100)],
+        enable=False,
+    )
+    cmds.menuItem(label="X")
+    cmds.menuItem(label="Y")
+    cmds.menuItem(label="Z")
+    array_alternate_scale = cmds.checkBox(label=u"スケールを交互に反転", value=False)
+    array_alternate_scale_axis = cmds.optionMenuGrp(
+        label=u"反転軸",
         columnWidth=[(1, 100)],
         enable=False,
     )
@@ -249,6 +304,13 @@ def show_ui():
         cmds.textFieldGrp(array_group_name, e=True, enable=value)
 
     cmds.checkBox(array_group, e=True, changeCommand=on_array_group_changed)
+
+    def on_array_alternate_scale_changed(value):
+        cmds.optionMenuGrp(array_alternate_scale_axis, e=True, enable=value)
+
+    cmds.checkBox(
+        array_alternate_scale, e=True, changeCommand=on_array_alternate_scale_changed
+    )
 
     def on_array_spec_mode_changed(*_):
         mode = cmds.optionMenuGrp(array_spec_mode, q=True, select=True)
@@ -284,6 +346,18 @@ def show_ui():
                     axis_idx = 1
                 axis_idx = max(1, min(3, axis_idx))
                 bbox_axis_value = ["x", "y", "z"][axis_idx - 1]
+            alternate_scale = cmds.checkBox(array_alternate_scale, q=True, value=True)
+            alternate_axis_value = "x"
+            if alternate_scale:
+                alt_axis_idx = cmds.optionMenuGrp(
+                    array_alternate_scale_axis, q=True, select=True
+                )
+                try:
+                    alt_axis_idx = int(alt_axis_idx)
+                except (TypeError, ValueError):
+                    alt_axis_idx = 1
+                alt_axis_idx = max(1, min(3, alt_axis_idx))
+                alternate_axis_value = ["x", "y", "z"][alt_axis_idx - 1]
             result = instanceArray.instance_child_between_parent(
                 count=cmds.intFieldGrp(array_count, q=True, value1=True),
                 include_end=cmds.checkBox(array_include_end, q=True, value=True),
@@ -293,6 +367,8 @@ def show_ui():
                 spacing=spacing_value,
                 use_bbox_spacing=use_bbox_spacing,
                 bbox_axis=bbox_axis_value,
+                alternate_scale=alternate_scale,
+                alternate_scale_axis=alternate_axis_value,
 
             )
             if result:
@@ -567,10 +643,13 @@ def show_ui():
     cmds.button(label=u"設定保存", command=on_save_settings, bgc=(0.8, 0.8, 0.8))
 
     _UI_CONTROLS = {
+        "array_spec_mode": array_spec_mode,
         "array_count": array_count,
         "array_include_end": array_include_end,
         "array_orient": array_orient,
         "array_parent": array_parent,
+        "array_alternate_scale": array_alternate_scale,
+        "array_alternate_scale_axis": array_alternate_scale_axis,
         "chain_count": chain_count,
         "chain_parent_mode": chain_parent_mode,
         "chain_parent_target": chain_parent_target,
@@ -580,6 +659,12 @@ def show_ui():
     }
 
     load_prefs()
+
+    on_array_spec_mode_changed()
+    on_array_group_changed(cmds.checkBox(array_group, q=True, value=True))
+    on_array_alternate_scale_changed(
+        cmds.checkBox(array_alternate_scale, q=True, value=True)
+    )
 
     def on_close(*_):
         global _UI_CONTROLS
