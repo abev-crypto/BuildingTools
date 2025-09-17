@@ -37,7 +37,19 @@ def replace_with_first_instance(template=None, targets=None):
 
         inst = cmds.instance(template, smartTransform=False)[0]
         if parent:
-            inst = cmds.parent(inst, parent[0])[0]
+            desired_parent = parent[0]
+            current_parent = cmds.listRelatives(inst, parent=True, fullPath=True) or []
+            if not current_parent or current_parent[0] != desired_parent:
+                try:
+                    result = cmds.parent(inst, desired_parent)
+                except RuntimeError as exc:
+                    cmds.warning(
+                        u"%s の親を %s に設定できませんでした: %s"
+                        % (inst, desired_parent, exc)
+                    )
+                else:
+                    if result:
+                        inst = result[0]
 
         cmds.xform(inst, ws=True, m=matrix)
 
