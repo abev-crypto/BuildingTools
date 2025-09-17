@@ -59,6 +59,8 @@ def instance_child_between_parent(
     spacing=None,
     use_bbox_spacing=False,
     bbox_axis="x",
+    alternate_scale=False,
+    alternate_scale_axis="x",
 ):
     """
     親(始点)と子(終点)の間に、子をインスタンス化して等間隔配置する。
@@ -81,6 +83,8 @@ def instance_child_between_parent(
         spacing (float|None): 指定した場合、親子間の距離に応じて等間隔配置する際の間隔。
         use_bbox_spacing (bool): True の場合、子のバウンディングボックスサイズを元に間隔を決定。
         bbox_axis (str): use_bbox_spacing=True のときに参照するローカル軸（"x"/"y"/"z"）。
+        alternate_scale (bool): True の場合、インスタンスのスケールを交互に反転させる。
+        alternate_scale_axis (str): スケールを反転させる軸（"x"/"y"/"z"）。
     Returns:
         list[str]: 作成したインスタンスノード名のリスト
     """
@@ -160,8 +164,23 @@ def instance_child_between_parent(
         cmds.warning(u"指定条件では配置するインスタンスがありません。")
         return []
 
+    alternate_axis = None
+    base_scale_values = None
+    if alternate_scale:
+        alternate_axis = (alternate_scale_axis or "x").lower()
+        if alternate_axis not in _AXIS_INDICES:
+            alternate_axis = "x"
+        try:
+            base_scale_values = cmds.xform(child, q=True, r=True, s=True)
+        except RuntimeError:
+            base_scale_values = None
+        if not base_scale_values or len(base_scale_values) < 3:
+            base_scale_values = [1.0, 1.0, 1.0]
+        else:
+            base_scale_values = list(base_scale_values[:3])
+
     created = []
-    for t in steps:
+    for index, t in enumerate(steps):
         pos = [p_pos[i] + (c_pos[i] - p_pos[i]) * t for i in range(3)]
         inst = cmds.instance(child, smartTransform=False)[0]
 
@@ -186,6 +205,19 @@ def instance_child_between_parent(
                 worldUpType="scene"
             )[0]
             cmds.delete(ac)
+
+        if alternate_axis and base_scale_values:
+            axis_index = _AXIS_INDICES[alternate_axis]
+            flip = -1 if (index % 2 == 1) else 1
+            scale_values = list(base_scale_values)
+            scale_values[axis_index] = base_scale_values[axis_index] * flip
+            axis_attrs = ["scaleX", "scaleY", "scaleZ"]
+            for attr_index, attr_name in enumerate(axis_attrs):
+                value = scale_values[attr_index]
+                try:
+                    cmds.setAttr(f"{inst}.{attr_name}", value)
+                except RuntimeError:
+                    pass
 
         created.append(inst)
 
