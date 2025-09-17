@@ -32,7 +32,6 @@ def replace_with_first_instance(template=None, targets=None):
             continue
 
         parent = cmds.listRelatives(target, parent=True, fullPath=True)
-        matrix = cmds.xform(target, q=True, ws=True, m=True)
         short_name = target.split("|")[-1]
 
         inst = cmds.instance(template, smartTransform=False)[0]
@@ -51,7 +50,15 @@ def replace_with_first_instance(template=None, targets=None):
                     if result:
                         inst = result[0]
 
-        cmds.xform(inst, ws=True, m=matrix)
+        try:
+            cmds.matchTransform(inst, target, pos=True, rot=True, scl=True)
+        except RuntimeError as exc:
+            cmds.warning(
+                u"%s のトランスフォームを %s に一致させられませんでした: %s"
+                % (inst, target, exc)
+            )
+            cmds.delete(inst)
+            continue
 
         cmds.delete(target)
         inst = cmds.rename(inst, short_name)
