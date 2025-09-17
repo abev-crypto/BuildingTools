@@ -379,6 +379,7 @@ def show_ui():
                 )
         except RuntimeError as exc:
             _show_error(str(exc))
+            raise
 
     cmds.button(label=u"配置", command=on_array_execute, bgc=(0.6, 0.8, 0.6))
     cmds.setParent("..")
@@ -472,6 +473,7 @@ def show_ui():
                 )
         except RuntimeError as exc:
             _show_error(str(exc))
+            raise
 
     cmds.button(label=u"配置", command=on_chain_execute, bgc=(0.6, 0.8, 0.6))
     cmds.setParent("..")
@@ -517,6 +519,7 @@ def show_ui():
                 )
         except RuntimeError as exc:
             _show_error(str(exc))
+            raise
 
     cmds.button(label=u"作成", command=on_radial_execute, bgc=(0.6, 0.8, 0.6))
     cmds.setParent("..")
@@ -538,6 +541,7 @@ def show_ui():
                 )
         except RuntimeError as exc:
             _show_error(str(exc))
+            raise
 
     cmds.button(label=u"選択をテンプレートのインスタンスで置換", command=on_replace, bgc=(0.6, 0.7, 0.9))
 
@@ -555,6 +559,7 @@ def show_ui():
                 )
         except RuntimeError as exc:
             _show_error(str(exc))
+            raise
 
     cmds.button(label=u"インスタンスをミラー", command=on_mirror_instance, bgc=(0.7, 0.7, 0.95))
 
@@ -632,6 +637,7 @@ def show_ui():
                 )
         except RuntimeError as exc:
             _show_error(str(exc))
+            raise
 
     cmds.button(label=u"ポジションで並べ替え", command=on_sort_selected, bgc=(0.7, 0.9, 0.7))
     cmds.setParent("..")
