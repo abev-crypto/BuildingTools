@@ -85,6 +85,94 @@ def make_selected_unique(nodes=None):
     return unique_nodes
 
 
+def _filter_mesh_transforms(nodes):
+    """Return only transform nodes that have a mesh shape."""
+
+    mesh_nodes = []
+    skipped = []
+    for node in nodes:
+        if not cmds.objExists(node):
+            continue
+        shapes = cmds.listRelatives(node, shapes=True, fullPath=True) or []
+        has_mesh = any(cmds.nodeType(shape) == "mesh" for shape in shapes)
+        if has_mesh:
+            mesh_nodes.append(node)
+        else:
+            skipped.append(node)
+    return mesh_nodes, skipped
+
+
+def make_unique_combine_merge(nodes=None, merge_distance=0.001, delete_history=True):
+    """Make instances unique, combine them, merge vertices, and delete history."""
+
+    nodes = nodes or cmds.ls(sl=True, type="transform", long=True) or []
+    if not nodes:
+        cmds.warning(u"インスタンスを解除する対象を選択してください。")
+        return None
+
+    mesh_nodes, skipped = _filter_mesh_transforms(nodes)
+    if not mesh_nodes:
+        cmds.warning(u"ポリゴンメッシュを持つノードが見つかりませんでした。")
+        return None
+
+    unique_nodes = make_selected_unique(nodes=mesh_nodes)
+    if not unique_nodes:
+        return None
+
+    unique_nodes = [n for n in unique_nodes if cmds.objExists(n)]
+    if not unique_nodes:
+        return None
+
+    source_count = len(unique_nodes)
+    base_name = unique_nodes[0].split("|")[-1]
+    combined_node = unique_nodes[0]
+
+    if source_count > 1:
+        try:
+            result = cmds.polyUnite(
+                unique_nodes,
+                ch=False,
+                mergeUVSets=True,
+                name=f"{base_name}_combined#",
+            )
+        except RuntimeError as exc:
+            cmds.warning(u"Combine に失敗しました: %s" % exc)
+            return None
+
+        combined_node = result[0] if isinstance(result, (list, tuple)) else result
+        try:
+            cmds.delete(unique_nodes)
+        except RuntimeError:
+            pass
+
+    try:
+        merge_distance_value = float(merge_distance)
+    except (TypeError, ValueError):
+        merge_distance_value = 0.0
+
+    if merge_distance_value > 0 and cmds.objExists(combined_node):
+        try:
+            cmds.polyMergeVertex(
+                combined_node,
+                d=merge_distance_value,
+                am=True,
+                ch=False,
+            )
+        except RuntimeError as exc:
+            cmds.warning(u"頂点マージに失敗しました: %s" % exc)
+
+    if delete_history and cmds.objExists(combined_node):
+        cmds.delete(combined_node, ch=True)
+
+    if skipped:
+        short_names = ", ".join(node.split("|")[-1] for node in skipped)
+        cmds.warning(u"メッシュを持たないノードをスキップしました: %s" % short_names)
+
+    if cmds.objExists(combined_node):
+        cmds.select(combined_node, r=True)
+
+    return combined_node, source_count
+
 def sort_selected_by_position(nodes=None, axis="auto", descending=False):
     """Sort selected transforms in the Outliner based on their world position.
 
@@ -220,9 +308,9 @@ def sort_selected_by_position(nodes=None, axis="auto", descending=False):
     cmds.warning(u"並べ替え可能なオブジェクトが見つかりませんでした。")
     return []
 
-
 __all__ = [
     "replace_with_first_instance",
     "make_selected_unique",
+    "make_unique_combine_merge",
     "sort_selected_by_position",
 ]

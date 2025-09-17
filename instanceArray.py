@@ -2,6 +2,52 @@
 import math
 import maya.cmds as cmds
 
+_AXIS_INDICES = {"x": 0, "y": 1, "z": 2}
+
+
+def _compute_bbox_spacing(node, axis):
+    """Return the world-space size of ``node`` along the given local ``axis``."""
+
+    if not cmds.objExists(node):
+        return None
+
+    axis = (axis or "x").lower()
+    if axis not in _AXIS_INDICES:
+        axis = "x"
+
+    try:
+        bbox = cmds.xform(node, q=True, bb=True, objectSpace=True)
+    except RuntimeError:
+        return None
+
+    if not bbox or len(bbox) < 6:
+        return None
+
+    axis_index = _AXIS_INDICES[axis]
+    min_value = bbox[axis_index]
+    max_value = bbox[axis_index + 3]
+    base_size = abs(max_value - min_value)
+    if base_size <= 1e-6:
+        return 0.0
+
+    try:
+        matrix = cmds.xform(node, q=True, ws=True, matrix=True)
+    except RuntimeError:
+        return None
+
+    axis_vectors = {
+        "x": (matrix[0], matrix[4], matrix[8]),
+        "y": (matrix[1], matrix[5], matrix[9]),
+        "z": (matrix[2], matrix[6], matrix[10]),
+    }
+    vec = axis_vectors[axis]
+    length = math.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2])
+    if length <= 1e-6:
+        return 0.0
+
+    return base_size * length
+
+
 def instance_child_between_parent(
     parent=None,
     child=None,
@@ -11,6 +57,8 @@ def instance_child_between_parent(
     parent_instances_to_parent=True,
     group_name=None,
     spacing=None,
+    use_bbox_spacing=False,
+    bbox_axis="x",
 ):
     """
     親(始点)と子(終点)の間に、子をインスタンス化して等間隔配置する。
@@ -31,6 +79,8 @@ def instance_child_between_parent(
             文字列が空の場合は "instanceGroup#" を利用。
             parent_instances_to_parent が True の場合はグループを parent の子にします。
         spacing (float|None): 指定した場合、親子間の距離に応じて等間隔配置する際の間隔。
+        use_bbox_spacing (bool): True の場合、子のバウンディングボックスサイズを元に間隔を決定。
+        bbox_axis (str): use_bbox_spacing=True のときに参照するローカル軸（"x"/"y"/"z"）。
     Returns:
         list[str]: 作成したインスタンスノード名のリスト
     """
@@ -56,13 +106,19 @@ def instance_child_between_parent(
         if parent_instances_to_parent and parent and cmds.objExists(parent):
             group_node = cmds.parent(group_node, parent)[0]
 
-    # 配置割合の計算
-    steps = [float(i)/(count+1) for i in range(1, count+1)]
-    if include_end:
-        steps.append(1.0)
     # 補間ステップの決定
-    steps = []
-    if spacing is not None:
+    spacing_value = None
+    use_spacing = False
+    if use_bbox_spacing:
+        spacing_value = _compute_bbox_spacing(child, bbox_axis)
+        if spacing_value is None:
+            cmds.warning(u"バウンディングボックスの取得に失敗しました。距離指定で再試行してください。")
+            return []
+        if spacing_value <= 1e-6:
+            cmds.warning(u"選択したローカル軸でのサイズがゼロのため、配置できません。")
+            return []
+        use_spacing = True
+    elif spacing is not None:
         try:
             spacing_value = float(spacing)
         except (TypeError, ValueError):
@@ -71,7 +127,10 @@ def instance_child_between_parent(
         if spacing_value <= 0:
             cmds.warning(u"距離指定は正の値にしてください。何も作成しません。")
             return []
+        use_spacing = True
 
+    steps = []
+    if use_spacing:
         vec = [c_pos[i] - p_pos[i] for i in range(3)]
         total_dist = math.sqrt(sum(v * v for v in vec))
         eps = 1e-6

@@ -228,6 +228,14 @@ def show_ui():
         columnWidth=[(1, 100), (2, 80)],
         enable=False,
     )
+    array_bbox_axis = cmds.optionMenuGrp(
+        label=u"ローカル軸",
+        columnWidth=[(1, 100)],
+        enable=False,
+    )
+    cmds.menuItem(label="X")
+    cmds.menuItem(label="Y")
+    cmds.menuItem(label="Z")
     array_include_end = cmds.checkBox(label=u"終点にも配置する", value=False)
     array_orient = cmds.optionMenuGrp(label=u"向き", columnWidth=[(1, 100)])
     cmds.menuItem(label=u"維持 (none)")
@@ -243,9 +251,12 @@ def show_ui():
     cmds.checkBox(array_group, e=True, changeCommand=on_array_group_changed)
 
     def on_array_spec_mode_changed(*_):
-        use_spacing = cmds.optionMenuGrp(array_spec_mode, q=True, select=True) == 2
-        cmds.intFieldGrp(array_count, e=True, enable=not use_spacing)
+        mode = cmds.optionMenuGrp(array_spec_mode, q=True, select=True)
+        use_spacing = mode == 2
+        use_bbox = mode == 3
+        cmds.intFieldGrp(array_count, e=True, enable=(mode == 1))
         cmds.floatFieldGrp(array_spacing, e=True, enable=use_spacing)
+        cmds.optionMenuGrp(array_bbox_axis, e=True, enable=use_bbox)
 
     cmds.optionMenuGrp(array_spec_mode, e=True, changeCommand=on_array_spec_mode_changed)
     on_array_spec_mode_changed()
@@ -258,10 +269,21 @@ def show_ui():
             if cmds.checkBox(array_group, q=True, value=True):
                 text = cmds.textFieldGrp(array_group_name, q=True, text=True).strip()
                 group_name = text if text else ""
-            use_spacing = cmds.optionMenuGrp(array_spec_mode, q=True, select=True) == 2
+            mode = cmds.optionMenuGrp(array_spec_mode, q=True, select=True)
             spacing_value = None
-            if use_spacing:
+            use_bbox_spacing = False
+            bbox_axis_value = "x"
+            if mode == 2:
                 spacing_value = cmds.floatFieldGrp(array_spacing, q=True, value1=True)
+            elif mode == 3:
+                use_bbox_spacing = True
+                axis_idx = cmds.optionMenuGrp(array_bbox_axis, q=True, select=True)
+                try:
+                    axis_idx = int(axis_idx)
+                except (TypeError, ValueError):
+                    axis_idx = 1
+                axis_idx = max(1, min(3, axis_idx))
+                bbox_axis_value = ["x", "y", "z"][axis_idx - 1]
             result = instanceArray.instance_child_between_parent(
                 count=cmds.intFieldGrp(array_count, q=True, value1=True),
                 include_end=cmds.checkBox(array_include_end, q=True, value=True),
@@ -269,6 +291,8 @@ def show_ui():
                 parent_instances_to_parent=cmds.checkBox(array_parent, q=True, value=True),
                 group_name=group_name,
                 spacing=spacing_value,
+                use_bbox_spacing=use_bbox_spacing,
+                bbox_axis=bbox_axis_value,
 
             )
             if result:
@@ -455,6 +479,35 @@ def show_ui():
 
     cmds.button(label=u"インスタンス解除", command=on_make_unique, bgc=(0.9, 0.7, 0.6))
 
+    cmds.separator(style="in")
+    cmds.text(label=u"選択：解除→結合→頂点マージ→履歴削除をまとめて行うオブジェクト", align="left")
+    combine_merge_distance = cmds.floatFieldGrp(
+        label=u"マージ距離",
+        value1=0.001,
+        columnWidth=[(1, 100), (2, 80)],
+    )
+
+    def on_make_unique_combine(*_):
+        distance_value = cmds.floatFieldGrp(combine_merge_distance, q=True, value1=True)
+        result = instanceUtilities.make_unique_combine_merge(merge_distance=distance_value)
+        if result:
+            combined_node, source_count = result
+            short_name = combined_node.split("|")[-1] if combined_node else combined_node
+            if source_count > 1:
+                message = u"%d 個のインスタンスを解除し、%s に結合しました。" % (source_count, short_name)
+            else:
+                message = u"インスタンスを解除し、%s を更新しました。" % short_name
+            cmds.inViewMessage(
+                amg=f"<span style='color:#b0ffb0'>{message}</span>",
+                pos="midCenter",
+                fade=True,
+            )
+
+    cmds.button(
+        label=u"解除→結合/マージ/履歴削除",
+        command=on_make_unique_combine,
+        bgc=(0.95, 0.6, 0.6),
+    )
     cmds.separator(style="in")
     cmds.text(label=u"選択：アウトライナ順を並べ替えたいオブジェクト", align="left")
     util_sort_axis = cmds.optionMenuGrp(
