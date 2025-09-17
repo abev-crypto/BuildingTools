@@ -508,6 +508,39 @@ def show_ui():
         command=on_make_unique_combine,
         bgc=(0.95, 0.6, 0.6),
     )
+    cmds.separator(style="in")
+    cmds.text(label=u"選択：アウトライナ順を並べ替えたいオブジェクト", align="left")
+    util_sort_axis = cmds.optionMenuGrp(
+        label=u"基準軸",
+        columnWidth=[(1, 100)],
+    )
+    cmds.menuItem(label=u"自動 (最大距離)")
+    cmds.menuItem(label="X")
+    cmds.menuItem(label="Y")
+    cmds.menuItem(label="Z")
+    util_sort_desc = cmds.checkBox(label=u"降順 (大きい順)", value=False)
+
+    def on_sort_selected(*_):
+        axis_idx = cmds.optionMenuGrp(util_sort_axis, q=True, select=True)
+        axis_value = {1: "auto", 2: "x", 3: "y", 4: "z"}[axis_idx]
+        descending = cmds.checkBox(util_sort_desc, q=True, value=True)
+        try:
+            result = instanceUtilities.sort_selected_by_position(axis=axis_value, descending=descending)
+            if result:
+                axis_label = {
+                    "auto": u"自動", "x": "X", "y": "Y", "z": "Z"
+                }[axis_value]
+                order_label = u"降順" if descending else u"昇順"
+                cmds.inViewMessage(
+                    amg=u"<span style='color:#b0ffb0'>%d 個のオブジェクトを %s (%s) で並べ替えました。</span>"
+                    % (len(result), axis_label, order_label),
+                    pos="midCenter",
+                    fade=True,
+                )
+        except RuntimeError as exc:
+            _show_error(str(exc))
+
+    cmds.button(label=u"ポジションで並べ替え", command=on_sort_selected, bgc=(0.7, 0.9, 0.7))
     cmds.setParent("..")
 
     cmds.tabLayout(
