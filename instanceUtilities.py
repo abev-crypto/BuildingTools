@@ -85,6 +85,41 @@ def make_selected_unique(nodes=None):
     return unique_nodes
 
 
+def mirror_selected_instances():
+    """Create mirrored instances using Maya's standard command."""
+
+    selection = cmds.ls(sl=True, type="transform", long=True) or []
+    if not selection:
+        cmds.warning(u"ミラーするインスタンスを選択してください。")
+        return []
+
+    before_nodes = set(cmds.ls(type="transform", long=True) or [])
+
+    try:
+        cmds.CreateMirrorInstance()
+    except AttributeError as exc:
+        raise RuntimeError(u"CreateMirrorInstance コマンドが見つかりません。") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(u"インスタンスのミラーに失敗しました: %s" % exc)
+
+    after_nodes = set(cmds.ls(type="transform", long=True) or [])
+    created = [node for node in after_nodes - before_nodes if cmds.objExists(node)]
+
+    if not created:
+        new_selection = cmds.ls(sl=True, type="transform", long=True) or []
+        created = [node for node in new_selection if node not in selection and cmds.objExists(node)]
+
+    if created:
+        try:
+            cmds.select(created, r=True)
+        except RuntimeError:
+            pass
+    else:
+        cmds.warning(u"ミラーの結果として新しいインスタンスは作成されませんでした。")
+
+    return created
+
+
 def _filter_mesh_transforms(nodes):
     """Return only transform nodes that have a mesh shape."""
 
