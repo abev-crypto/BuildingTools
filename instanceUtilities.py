@@ -85,29 +85,31 @@ def make_selected_unique(nodes=None):
     return unique_nodes
 
 
-def mirror_selected_instances():
-    """Create mirrored instances using Maya's standard command."""
+def mirror_selected_instances(axis="x"):
+    """Mirror selected instances.
+
+    This first tries Maya's :command:`CreateMirrorInstance` command.  If that
+    runtime command is not available a scripted fallback is used that creates a
+    mirrored instance by instancing the selection and flipping the requested
+    scale axis.  When an already-instanced transform is selected, the existing
+    instance is mirrored in place instead of creating an extra copy.
+
+    Args:
+        axis (str): Axis to mirror across. Only ``"x"``, ``"y"`` and ``"z"`` are
+            supported. Defaults to ``"x"``.
+
+    Returns:
+        list[str]: Names of the mirrored (or newly created) transforms.
+    """
 
     selection = cmds.ls(sl=True, type="transform", long=True) or []
     if not selection:
         cmds.warning(u"ミラーするインスタンスを選択してください。")
         return []
 
-    before_nodes = set(cmds.ls(type="transform", long=True) or [])
-
-    try:
-        cmds.CreateMirrorInstance()
-    except AttributeError as exc:
-        raise RuntimeError(u"CreateMirrorInstance コマンドが見つかりません。") from exc
-    except RuntimeError as exc:
-        raise RuntimeError(u"インスタンスのミラーに失敗しました: %s" % exc)
-
-    after_nodes = set(cmds.ls(type="transform", long=True) or [])
-    created = [node for node in after_nodes - before_nodes if cmds.objExists(node)]
-
-    if not created:
-        new_selection = cmds.ls(sl=True, type="transform", long=True) or []
-        created = [node for node in new_selection if node not in selection and cmds.objExists(node)]
+    created = _mirror_via_runtime(selection)
+    if created is None:
+        created = _mirror_instances_manually(selection, axis=axis)
 
     if created:
         try:
@@ -118,6 +120,181 @@ def mirror_selected_instances():
         cmds.warning(u"ミラーの結果として新しいインスタンスは作成されませんでした。")
 
     return created
+
+
+def _mirror_via_runtime(selection):
+    """Try to mirror using Maya's CreateMirrorInstance command.
+
+    Args:
+        selection (list[str]): Original transform selection.
+
+    Returns:
+        list[str] | None: Returns ``None`` when the runtime command is not
+        available or fails. Otherwise returns the list of nodes reported by the
+        command (which may be empty).
+    """
+
+    command = getattr(cmds, "CreateMirrorInstance", None)
+    if not callable(command):
+        return None
+
+    before_nodes = set(cmds.ls(type="transform", long=True) or [])
+    try:
+        command()
+    except RuntimeError as exc:
+        cmds.warning(u"CreateMirrorInstance の実行に失敗したため、スクリプトによるミラー処理に切り替えます: %s" % exc)
+        return None
+    except Exception as exc:  # pylint: disable=broad-except
+        cmds.warning(u"CreateMirrorInstance の呼び出しに失敗したため、スクリプトによるミラー処理に切り替えます: %s" % exc)
+        return None
+
+    after_nodes = set(cmds.ls(type="transform", long=True) or [])
+    created = [node for node in after_nodes - before_nodes if cmds.objExists(node)]
+
+    if not created:
+        new_selection = cmds.ls(sl=True, type="transform", long=True) or []
+        created = [node for node in new_selection if node not in selection and cmds.objExists(node)]
+
+    return created
+
+
+def _mirror_instances_manually(selection, axis="x"):
+    """Mirror instances without relying on Maya's runtime command."""
+
+    axis_key = _normalize_axis(axis)
+    selection_set = set(selection)
+    processed = set()
+    mirrored_nodes = []
+
+    for node in selection:
+        if node in processed or not cmds.objExists(node):
+            continue
+
+        shared_transforms = _transforms_sharing_shapes(node)
+        shared_transforms = [n for n in shared_transforms if cmds.objExists(n)]
+
+        if shared_transforms and len(shared_transforms) > 1:
+            targets = [n for n in shared_transforms if n in selection_set]
+            if targets:
+                for target in targets:
+                    if target in processed or not cmds.objExists(target):
+                        continue
+                    if _mirror_existing_transform(target, axis_key):
+                        mirrored_nodes.append(target)
+                    processed.add(target)
+                if node not in processed:
+                    processed.add(node)
+                continue
+
+        new_node = _create_mirrored_instance(node, axis_key)
+        if new_node:
+            mirrored_nodes.append(new_node)
+        processed.add(node)
+
+    return mirrored_nodes
+
+
+def _normalize_axis(axis):
+    """Return a valid axis label for mirroring."""
+
+    axis = (axis or "x").lower()
+    return axis if axis in ("x", "y", "z") else "x"
+
+
+def _transforms_sharing_shapes(node):
+    """Return transforms that share shapes with *node*."""
+
+    transforms = {node}
+    shapes = cmds.listRelatives(node, shapes=True, fullPath=True) or []
+    for shape in shapes:
+        parents = cmds.listRelatives(shape, parent=True, fullPath=True) or []
+        transforms.update(parents)
+    return list(transforms)
+
+
+def _create_mirrored_instance(node, axis):
+    """Instance *node* and apply a mirrored scale."""
+
+    try:
+        result = cmds.instance(node, smartTransform=False)
+    except RuntimeError as exc:
+        cmds.warning(u"%s のインスタンス作成に失敗しました: %s" % (node, exc))
+        return None
+
+    if not result:
+        return None
+
+    instance_node = result[0]
+    parent = cmds.listRelatives(node, parent=True, fullPath=True)
+
+    if parent:
+        try:
+            instance_node = cmds.parent(instance_node, parent[0])[0]
+        except RuntimeError:
+            pass
+
+    try:
+        matrix = cmds.xform(node, q=True, ws=True, matrix=True)
+        cmds.xform(instance_node, ws=True, matrix=matrix)
+    except RuntimeError:
+        pass
+
+    short_name = node.split("|")[-1]
+    try:
+        instance_node = cmds.rename(instance_node, f"{short_name}_mirror#")
+    except RuntimeError:
+        pass
+
+    _apply_negative_scale(instance_node, axis, reference=node)
+
+    return instance_node
+
+
+def _mirror_existing_transform(node, axis):
+    """Mirror an already existing instance by flipping its scale."""
+
+    if not cmds.objExists(node):
+        return False
+
+    return _apply_negative_scale(node, axis)
+
+
+def _apply_negative_scale(node, axis, reference=None):
+    """Set the scale on *node* so that the *axis* component is negative."""
+
+    axis_index = {"x": 0, "y": 1, "z": 2}[axis]
+    attr_names = [".scaleX", ".scaleY", ".scaleZ"]
+
+    source_node = reference if reference and cmds.objExists(reference) else node
+
+    values = []
+    for attr in attr_names:
+        try:
+            values.append(cmds.getAttr(source_node + attr))
+        except RuntimeError:
+            values.append(1.0)
+
+    if not values:
+        return False
+
+    target_value = -abs(values[axis_index]) if values[axis_index] is not None else -1.0
+
+    # Apply all three axes so that non-mirrored axes match the source.
+    success = True
+    for idx, attr in enumerate(attr_names):
+        if not cmds.objExists(node + attr):
+            continue
+        value = values[idx] if values[idx] is not None else 1.0
+        if idx == axis_index:
+            value = target_value
+        try:
+            cmds.setAttr(node + attr, value)
+        except RuntimeError as exc:
+            cmds.warning(u"%s のスケール設定に失敗しました: %s" % (node, exc))
+            success = False
+            break
+
+    return success
 
 
 def _filter_mesh_transforms(nodes):
