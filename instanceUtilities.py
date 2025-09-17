@@ -173,14 +173,15 @@ def make_unique_combine_merge(nodes=None, merge_distance=0.001, delete_history=T
 
     return combined_node, source_count
 
-def sort_selected_by_position(nodes=None, axis="auto", descending=False):
-    """Sort selected transforms in the Outliner based on their world position.
+def sort_selected_by_position(nodes=None, axis="auto", descending=False, space="world"):
+    """Sort selected transforms in the Outliner based on their position.
 
     Args:
         nodes (list[str] | None): Target transforms. Defaults to current selection.
         axis (str): Axis to sort by. ``"x"``, ``"y"``, ``"z"`` or ``"auto"``.
             ``"auto"`` picks the axis with the largest positional spread per parent.
         descending (bool): If True, reverse the sort order.
+        space (str): Coordinate space used to query positions, ``"world"`` or ``"local"``.
 
     Returns:
         list[str]: Nodes reordered in their new Outliner sequence.
@@ -191,6 +192,17 @@ def sort_selected_by_position(nodes=None, axis="auto", descending=False):
     if axis not in axis_map and axis != "auto":
         cmds.error(u"axis には auto / x / y / z のいずれかを指定してください。")
         return []
+
+    if isinstance(space, str):
+        space_normalized = space.strip().lower() or "world"
+    else:
+        space_normalized = "world"
+
+    if space_normalized not in {"world", "local"}:
+        cmds.error(u"space には world / local のいずれかを指定してください。")
+        return []
+
+    use_world_space = space_normalized == "world"
 
     nodes = nodes or cmds.ls(sl=True, type="transform", long=True) or []
     nodes = [node for node in nodes if cmds.objExists(node)]
@@ -238,24 +250,33 @@ def sort_selected_by_position(nodes=None, axis="auto", descending=False):
             continue
 
         data = []
+        incomplete_positions = False
         for node in group:
-            pos = cmds.xform(node, q=True, ws=True, t=True)
-            data.append((node, pos))
+            pos = cmds.xform(node, q=True, ws=use_world_space, t=True)
+            if pos is None or len(pos) < 3:
+                cmds.warning(u"%s の位置を取得できませんでした。" % node)
+                incomplete_positions = True
+                break
+            cleaned = [float(pos[idx]) for idx in range(3)]
+            data.append((node, cleaned))
 
-        axis_index = _choose_axis(data)
-        if axis_index is None:
+        if incomplete_positions:
             sorted_nodes = sorted(group)
         else:
-            secondary_axes = [idx for idx in range(3) if idx != axis_index]
+            axis_index = _choose_axis(data)
+            if axis_index is None:
+                sorted_nodes = sorted(group)
+            else:
+                secondary_axes = [idx for idx in range(3) if idx != axis_index]
 
-            def _sort_key(item):
-                pos = item[1]
-                key_values = [round(pos[axis_index], 6)]
-                key_values.extend(round(pos[idx], 6) for idx in secondary_axes)
-                key_values.append(item[0])
-                return tuple(key_values)
+                def _sort_key(item):
+                    pos = item[1]
+                    key_values = [round(pos[axis_index], 6)]
+                    key_values.extend(round(pos[idx], 6) for idx in secondary_axes)
+                    key_values.append(item[0])
+                    return tuple(key_values)
 
-            sorted_nodes = [item[0] for item in sorted(data, key=_sort_key)]
+                sorted_nodes = [item[0] for item in sorted(data, key=_sort_key)]
 
         if descending:
             sorted_nodes.reverse()
