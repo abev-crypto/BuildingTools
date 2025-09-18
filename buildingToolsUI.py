@@ -258,14 +258,18 @@ def show_ui():
     # Array tab
     # ------------------------------------------------------------------
     array_tab = cmds.columnLayout(adj=True, rowSpacing=6, columnAttach=("both", 8))
-    cmds.text(label=u"選択：親(始点) → 子(終点)", align="left")
+    cmds.text(
+        label=u"選択：親(始点) → 子(終点)\n※ バウンディングボックス（個数）は子のみで実行可能",
+        align="left",
+    )
     array_spec_mode = cmds.optionMenuGrp(
         label=u"指定方法",
         columnWidth=[(1, 100)],
     )
     cmds.menuItem(label=u"個数指定")
     cmds.menuItem(label=u"距離指定")
-    cmds.menuItem(label=u"バウンディングボックス")
+    cmds.menuItem(label=u"バウンディングボックス（距離）")
+    cmds.menuItem(label=u"バウンディングボックス（個数）")
 
     array_count = cmds.intFieldGrp(label=u"間に置く個数", value1=5, columnWidth=[(1, 100), (2, 60)])
     array_spacing = cmds.floatFieldGrp(
@@ -315,10 +319,15 @@ def show_ui():
     def on_array_spec_mode_changed(*_):
         mode = cmds.optionMenuGrp(array_spec_mode, q=True, select=True)
         use_spacing = mode == 2
-        use_bbox = mode == 3
-        cmds.intFieldGrp(array_count, e=True, enable=(mode == 1))
+        use_bbox_distance = mode == 3
+        use_bbox_count = mode == 4
+        cmds.intFieldGrp(array_count, e=True, enable=(mode in (1, 4)))
         cmds.floatFieldGrp(array_spacing, e=True, enable=use_spacing)
-        cmds.optionMenuGrp(array_bbox_axis, e=True, enable=use_bbox)
+        cmds.optionMenuGrp(
+            array_bbox_axis,
+            e=True,
+            enable=(use_bbox_distance or use_bbox_count),
+        )
 
     cmds.optionMenuGrp(array_spec_mode, e=True, changeCommand=on_array_spec_mode_changed)
     on_array_spec_mode_changed()
@@ -335,10 +344,21 @@ def show_ui():
             spacing_value = None
             use_bbox_spacing = False
             bbox_axis_value = "x"
+            bbox_count_mode_flag = False
             if mode == 2:
                 spacing_value = cmds.floatFieldGrp(array_spacing, q=True, value1=True)
             elif mode == 3:
                 use_bbox_spacing = True
+                axis_idx = cmds.optionMenuGrp(array_bbox_axis, q=True, select=True)
+                try:
+                    axis_idx = int(axis_idx)
+                except (TypeError, ValueError):
+                    axis_idx = 1
+                axis_idx = max(1, min(3, axis_idx))
+                bbox_axis_value = ["x", "y", "z"][axis_idx - 1]
+            elif mode == 4:
+                use_bbox_spacing = True
+                bbox_count_mode_flag = True
                 axis_idx = cmds.optionMenuGrp(array_bbox_axis, q=True, select=True)
                 try:
                     axis_idx = int(axis_idx)
@@ -369,6 +389,7 @@ def show_ui():
                 bbox_axis=bbox_axis_value,
                 alternate_scale=alternate_scale,
                 alternate_scale_axis=alternate_axis_value,
+                bbox_count_mode=bbox_count_mode_flag,
 
             )
             if result:
